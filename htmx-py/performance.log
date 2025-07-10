@@ -1,0 +1,95 @@
+2025-04-22 11:35:08,600 [INFO] === Starting Performance Measurement ===
+2025-04-22 11:35:08,600 [INFO] Target App URL: http://127.0.0.1:5000/get-owners-powder
+2025-04-22 11:35:08,601 [INFO] Test Collection: 0x79FCDEF22feeD20eDDacbB2587640e45491b757f
+2025-04-22 11:35:08,601 [INFO] Number of runs: 3
+2025-04-22 11:35:08,601 [INFO] --- Run 1/3 ---
+2025-04-22 11:35:08,601 [INFO] Starting test run for collection: 0x79FCDEF22feeD20eDDacbB2587640e45491b757f
+2025-04-22 11:35:13,463 [INFO] Test run SUCCESSFUL for 0x79FCDEF22feeD20eDDacbB2587640e45491b757f. Duration: 4.86 seconds.
+2025-04-22 11:35:15,464 [INFO] --- Run 2/3 ---
+2025-04-22 11:35:15,474 [INFO] Starting test run for collection: 0x79FCDEF22feeD20eDDacbB2587640e45491b757f
+2025-04-22 11:35:18,920 [INFO] Test run SUCCESSFUL for 0x79FCDEF22feeD20eDDacbB2587640e45491b757f. Duration: 3.45 seconds.
+2025-04-22 11:35:20,921 [INFO] --- Run 3/3 ---
+2025-04-22 11:35:20,921 [INFO] Starting test run for collection: 0x79FCDEF22feeD20eDDacbB2587640e45491b757f
+2025-04-22 11:35:24,379 [INFO] Test run SUCCESSFUL for 0x79FCDEF22feeD20eDDacbB2587640e45491b757f. Duration: 3.46 seconds.
+2025-04-22 11:35:26,380 [INFO] === Performance Measurement Summary ===
+2025-04-22 11:35:26,380 [INFO] Successful runs: 3/3
+2025-04-22 11:35:26,380 [INFO] Average Duration: 3.92 seconds
+2025-04-22 11:35:26,380 [INFO] Min Duration: 3.45 seconds
+2025-04-22 11:35:26,380 [INFO] Max Duration: 4.86 seconds
+2025-04-22 11:35:26,380 [INFO] === Performance Measurement Finished ===
+2025-04-22 11:44:05,944 [INFO] === Starting Performance Measurement ===
+2025-04-22 11:44:05,945 [INFO] Target App URL: http://127.0.0.1:5000/get-owners-powder
+2025-04-22 11:44:05,945 [INFO] Test Collection: 0x79FCDEF22feeD20eDDacbB2587640e45491b757f
+2025-04-22 11:44:05,945 [INFO] Number of runs: 3
+2025-04-22 11:44:05,945 [INFO] --- Run 1/3 ---
+2025-04-22 11:44:05,947 [INFO] Starting test run for collection: 0x79FCDEF22feeD20eDDacbB2587640e45491b757f
+2025-04-22 11:44:06,161 [INFO] Test run SUCCESSFUL for 0x79FCDEF22feeD20eDDacbB2587640e45491b757f. Duration: 0.21 seconds.
+2025-04-22 11:44:08,162 [INFO] --- Run 2/3 ---
+2025-04-22 11:44:08,162 [INFO] Starting test run for collection: 0x79FCDEF22feeD20eDDacbB2587640e45491b757f
+2025-04-22 11:44:08,250 [INFO] Test run SUCCESSFUL for 0x79FCDEF22feeD20eDDacbB2587640e45491b757f. Duration: 0.09 seconds.
+2025-04-22 11:44:10,250 [INFO] --- Run 3/3 ---
+2025-04-22 11:44:10,250 [INFO] Starting test run for collection: 0x79FCDEF22feeD20eDDacbB2587640e45491b757f
+2025-04-22 11:44:10,333 [INFO] Test run SUCCESSFUL for 0x79FCDEF22feeD20eDDacbB2587640e45491b757f. Duration: 0.08 seconds.
+2025-04-22 11:44:12,334 [INFO] === Performance Measurement Summary ===
+2025-04-22 11:44:12,334 [INFO] Successful runs: 3/3
+2025-04-22 11:44:12,334 [INFO] Average Duration: 0.13 seconds
+2025-04-22 11:44:12,335 [INFO] Min Duration: 0.08 seconds
+2025-04-22 11:44:12,335 [INFO] Max Duration: 0.21 seconds
+2025-04-22 11:44:12,335 [INFO] === Performance Measurement Finished ===
+2025-04-22 11:47:01,312 [INFO] === Starting Performance Measurement ===
+2025-04-22 11:47:01,312 [INFO] Target App URL: http://127.0.0.1:5000/get-owners-powder
+2025-04-22 11:47:01,313 [INFO] Test Collection: 0x79FCDEF22feeD20eDDacbB2587640e45491b757f
+2025-04-22 11:47:01,313 [INFO] Number of runs: 3
+2025-04-22 11:47:01,313 [INFO] --- Run 1/3 ---
+2025-04-22 11:47:01,313 [INFO] Starting test run for collection: 0x79FCDEF22feeD20eDDacbB2587640e45491b757f
+2025-04-22 11:47:01,538 [INFO] Test run SUCCESSFUL for 0x79FCDEF22feeD20eDDacbB2587640e45491b757f. Duration: 0.22 seconds.
+2025-04-22 11:47:03,539 [INFO] --- Run 2/3 ---
+2025-04-22 11:47:03,539 [INFO] Starting test run for collection: 0x79FCDEF22feeD20eDDacbB2587640e45491b757f
+2025-04-22 11:47:03,634 [INFO] Test run SUCCESSFUL for 0x79FCDEF22feeD20eDDacbB2587640e45491b757f. Duration: 0.10 seconds.
+2025-04-22 11:47:05,636 [INFO] --- Run 3/3 ---
+2025-04-22 11:47:05,636 [INFO] Starting test run for collection: 0x79FCDEF22feeD20eDDacbB2587640e45491b757f
+2025-04-22 11:47:05,727 [INFO] Test run SUCCESSFUL for 0x79FCDEF22feeD20eDDacbB2587640e45491b757f. Duration: 0.09 seconds.
+2025-04-22 11:47:07,728 [INFO] === Performance Measurement Summary ===
+2025-04-22 11:47:07,728 [INFO] Successful runs: 3/3
+2025-04-22 11:47:07,729 [INFO] Average Duration: 0.14 seconds
+2025-04-22 11:47:07,729 [INFO] Min Duration: 0.09 seconds
+2025-04-22 11:47:07,729 [INFO] Max Duration: 0.22 seconds
+2025-04-22 11:47:07,729 [INFO] === Performance Measurement Finished ===
+2025-04-22 11:49:06,001 [INFO] === Starting Performance Measurement ===
+2025-04-22 11:49:06,001 [INFO] Target App URL: http://127.0.0.1:5000/get-owners-powder
+2025-04-22 11:49:06,001 [INFO] Test Collection: 0x79FCDEF22feeD20eDDacbB2587640e45491b757f
+2025-04-22 11:49:06,001 [INFO] Number of runs: 3
+2025-04-22 11:49:06,001 [INFO] --- Run 1/3 ---
+2025-04-22 11:49:06,001 [INFO] Starting test run for collection: 0x79FCDEF22feeD20eDDacbB2587640e45491b757f
+2025-04-22 11:49:06,946 [INFO] Test run SUCCESSFUL for 0x79FCDEF22feeD20eDDacbB2587640e45491b757f. Duration: 0.94 seconds.
+2025-04-22 11:49:08,947 [INFO] --- Run 2/3 ---
+2025-04-22 11:49:08,947 [INFO] Starting test run for collection: 0x79FCDEF22feeD20eDDacbB2587640e45491b757f
+2025-04-22 11:49:09,027 [INFO] Test run SUCCESSFUL for 0x79FCDEF22feeD20eDDacbB2587640e45491b757f. Duration: 0.08 seconds.
+2025-04-22 11:49:11,028 [INFO] --- Run 3/3 ---
+2025-04-22 11:49:11,029 [INFO] Starting test run for collection: 0x79FCDEF22feeD20eDDacbB2587640e45491b757f
+2025-04-22 11:49:11,114 [INFO] Test run SUCCESSFUL for 0x79FCDEF22feeD20eDDacbB2587640e45491b757f. Duration: 0.09 seconds.
+2025-04-22 11:49:13,115 [INFO] === Performance Measurement Summary ===
+2025-04-22 11:49:13,115 [INFO] Successful runs: 3/3
+2025-04-22 11:49:13,115 [INFO] Average Duration: 0.37 seconds
+2025-04-22 11:49:13,115 [INFO] Min Duration: 0.08 seconds
+2025-04-22 11:49:13,117 [INFO] Max Duration: 0.94 seconds
+2025-04-22 11:49:13,117 [INFO] === Performance Measurement Finished ===
+2025-04-22 11:51:23,175 [INFO] === Starting Performance Measurement ===
+2025-04-22 11:51:23,175 [INFO] Target App URL: http://127.0.0.1:5000/get-owners-powder
+2025-04-22 11:51:23,175 [INFO] Test Collection: 0x79FCDEF22feeD20eDDacbB2587640e45491b757f
+2025-04-22 11:51:23,175 [INFO] Number of runs: 3
+2025-04-22 11:51:23,176 [INFO] --- Run 1/3 ---
+2025-04-22 11:51:23,176 [INFO] Starting test run for collection: 0x79FCDEF22feeD20eDDacbB2587640e45491b757f
+2025-04-22 11:51:23,500 [INFO] Test run SUCCESSFUL for 0x79FCDEF22feeD20eDDacbB2587640e45491b757f. Duration: 0.32 seconds.
+2025-04-22 11:51:25,501 [INFO] --- Run 2/3 ---
+2025-04-22 11:51:25,501 [INFO] Starting test run for collection: 0x79FCDEF22feeD20eDDacbB2587640e45491b757f
+2025-04-22 11:51:25,794 [INFO] Test run SUCCESSFUL for 0x79FCDEF22feeD20eDDacbB2587640e45491b757f. Duration: 0.29 seconds.
+2025-04-22 11:51:27,795 [INFO] --- Run 3/3 ---
+2025-04-22 11:51:27,795 [INFO] Starting test run for collection: 0x79FCDEF22feeD20eDDacbB2587640e45491b757f
+2025-04-22 11:51:28,106 [INFO] Test run SUCCESSFUL for 0x79FCDEF22feeD20eDDacbB2587640e45491b757f. Duration: 0.31 seconds.
+2025-04-22 11:51:30,108 [INFO] === Performance Measurement Summary ===
+2025-04-22 11:51:30,108 [INFO] Successful runs: 3/3
+2025-04-22 11:51:30,108 [INFO] Average Duration: 0.31 seconds
+2025-04-22 11:51:30,108 [INFO] Min Duration: 0.29 seconds
+2025-04-22 11:51:30,109 [INFO] Max Duration: 0.32 seconds
+2025-04-22 11:51:30,109 [INFO] === Performance Measurement Finished ===

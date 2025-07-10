@@ -1,0 +1,22 @@
+services:
+  powder-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nft-powder-calculator
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      # Configure Ethereum node URL if needed
+      - NODE_URL=http://192.168.10.8:8545
+    volumes:
+      # For development: mount the templates directory
+      - ./templates:/app/templates
+      # For development: mount the static directory
+      - ./static:/app/static
+    restart: unless-stopped
+    # If you need to connect to an Ethereum node on the host machine
+    # Use 'host.docker.internal' (works on Docker Desktop)
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"

@@ -1,0 +1,22 @@
+{
+  "name": "vangoby",
+  "module": "index.ts",
+  "type": "module",
+  "scripts": {
+    "start": "bun run index.ts",
+    "dev": "bun --watch run index.ts",
+    "build": "bun run build:frontend",
+    "build:frontend": "bun build ./frontend/src/index.tsx --outdir ./public --minify"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "ethers": "^6.13.5",
+    "preact": "^10.26.4",
+    "preact-render-to-string": "^6.5.13"
+  }
+}
