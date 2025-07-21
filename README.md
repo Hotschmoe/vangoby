@@ -34,7 +34,7 @@ cp .env.example .env
 
 3. **Run with docker-compose**:
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 4. **Access the application**:
@@ -90,7 +90,7 @@ The repository includes a performance benchmarking tool to measure analysis spee
 1. **Start the application** (Docker or local):
 ```bash
 # With Docker
-docker-compose up -d
+docker compose up -d
 
 # Or locally
 cd src && python app.py
