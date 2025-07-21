@@ -4,62 +4,95 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Vangoby is an NFT collection analysis platform with multiple implementations exploring different tech stacks. The main application compares NFT collections to analyze holder liquid net worth, with experimental variants in Go (htmx-go), Python (htmx-py), and MEV bot components.
+Vangoby is a high-performance NFT holder wealth analysis tool. It analyzes how much ETH ("powder") unique holders of NFT collections have accumulated over time, comparing three time points: current, 6 months ago, and 1 year ago.
 
-## Core Architecture
+## Current Architecture
 
-### Main Application (Bun + Preact)
-- **Entry Point**: `index.ts` - Main server that serves static files and proxies API requests
-- **Backend**: `backend/server.ts` - API server handling NFT data fetching using ethers.js
-- **Frontend**: `frontend/src/` - Preact + TypeScript UI with component-based architecture
-- **Build System**: Bun's built-in bundler with automatic frontend compilation
+### Main Application (Python + HTMX)
+- **Backend**: `src/app.py` - Flask server with Web3.py for blockchain interaction
+- **Frontend**: `src/index.html` - Single HTML file with HTMX for dynamic updates
+- **Dependencies**: `src/requirements.txt` - Flask, web3, plotly
 
 ### Data Flow
-1. Frontend sends requests to `/api/nft-data` with contract addresses
-2. Backend queries Ethereum mainnet via Alchemy demo RPC
-3. Currently returns mock data; real implementation would fetch holder lists and ETH balances
-4. Results displayed in side-by-side comparison cards
+1. User submits NFT collection address via HTMX form
+2. Flask backend calculates historical block numbers (6mo, 1yr ago)
+3. Parallel processing fetches owner data at all three time points
+4. Batch RPC calls optimize blockchain queries (`ownerOf`, `getBalance`)
+5. Results returned as HTML with Plotly chart embedded
 
-### Alternative Implementations
-- **htmx-go/**: Go backend with HTMX frontend, uses Go-Ethereum client
-- **htmx-py/**: Flask backend with web3.py, includes performance testing
-- **mev-bots/**: Experimental MEV bot components
+### Performance Optimizations
+- **Batch RPC calls**: Groups multiple blockchain queries into single requests
+- **Parallel execution**: Fetches all time points simultaneously using ThreadPoolExecutor
+- **Connection pooling**: Optimized HTTP session management for RPC calls
+- **Smart batching**: Processes tokens in configurable batch sizes (default: 25)
 
 ## Development Commands
 
+### Docker (Recommended)
 ```bash
-# Development server with auto-reload
-bun run dev
+# Quick start
+docker-compose up -d
 
-# Production server
-bun run start
+# View logs
+docker-compose logs -f
 
-# Build frontend only
-bun run build
+# Rebuild after changes
+docker-compose up --build
 ```
 
-## Key Technical Details
+### Local Development
+```bash
+# Install dependencies
+cd src && pip install -r requirements.txt
 
-- **Port Configuration**: Frontend on 3001, backend on 3002
-- **Ethereum Integration**: Uses ethers.js with Alchemy RPC (demo key)
-- **State Management**: Preact hooks for component state
-- **Build Output**: Frontend builds to `./public/` directory
-- **TypeScript**: Configured for ESNext with strict mode
+# Run server
+cd src && python app.py
+```
 
-## Project Structure Context
+## Key Configuration
 
-The repository contains multiple proof-of-concept implementations:
-- Main Bun/Preact app in root directory
-- Go variant using Gorilla mux and go-ethereum
-- Python variant using Flask and web3.py
-- Shared goal of analyzing NFT holder wealth distribution
+**Environment Variables** (set in `.env` or docker-compose.yml):
+- `NODE_URL`: Ethereum RPC endpoint (default: `http://192.168.10.8:8545`)
+- `MAX_TOKENS_TO_CHECK`: Maximum tokens per time point (default: 10000)
+- `REQUEST_TIMEOUT`: RPC timeout in seconds (default: 240)
+- `AVG_BLOCK_TIME_SECONDS`: For historical block calculation (default: 12)
 
-## Testing Notes
+**Code Configuration** (in `src/app.py`):
+- Lines 17-20: Core configuration constants
+- Line 24-28: HTTP session pool settings
+- Line 210: Batch size for RPC calls (25 tokens per batch)
+- Line 135: Balance batch size (50 addresses per batch)
 
-No test framework is currently configured. The htmx-py implementation includes performance testing via `performance_metrics.py`.
+## Project Structure
 
-## Known Limitations
+```
+src/
+├── app.py           # Main Flask application with blockchain logic
+├── index.html       # HTMX frontend with embedded CSS
+└── requirements.txt # Python dependencies
 
-- Backend currently uses mock data instead of real blockchain queries
-- Ethereum node connection requires archive node for historical data
-- Rate limiting and caching not yet implemented
+archive/             # Archived experimental implementations
+├── frontend/        # Old Preact frontend
+├── backend/         # Old Bun backend  
+├── htmx-go/         # Go implementation
+└── ...
+
+mev-bots-separate/   # MEV bot experiments (separate project)
+```
+
+## Technical Requirements
+
+- **Archive Node Required**: Historical balance queries require archive-enabled Ethereum node
+- **Memory**: Can handle large collections (10k+ tokens) with sufficient RAM
+- **Network**: Stable connection to Ethereum RPC endpoint essential
+
+## Performance Notes
+
+- Collection analysis time scales with token count and RPC latency
+- Batch sizes (25 tokens, 50 addresses) optimized for typical RPC limits
+- Parallel processing significantly reduces total execution time
+- Connection pooling prevents RPC connection exhaustion
+
+## Deployment Context
+
+Designed for home server deployment with local Erigon node. Docker setup includes health checks, logging, and restart policies suitable for production self-hosting.
