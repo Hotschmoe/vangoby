@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(mv:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(python3:*)",
+      "Bash(source:*)",
+      "Bash(pip install:*)",
+      "Bash(curl:*)"
     ],
     "deny": []
   }

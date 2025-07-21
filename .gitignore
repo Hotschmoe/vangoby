@@ -2,6 +2,8 @@
 
 public/
 
+src/venv/
+
 # Logs
 
 logs
