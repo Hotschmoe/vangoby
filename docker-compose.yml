@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  vangoby:
+    build: .
+    container_name: vangoby-nft-analyzer
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+      - NODE_URL=${NODE_URL:-http://192.168.10.8:8545}
+      - REQUEST_TIMEOUT=${REQUEST_TIMEOUT:-240}
+      - MAX_TOKENS_TO_CHECK=${MAX_TOKENS_TO_CHECK:-10000}
+      - AVG_BLOCK_TIME_SECONDS=${AVG_BLOCK_TIME_SECONDS:-12}
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - vangoby-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  vangoby-network:
+    driver: bridge
+
+volumes:
+  logs:
+    driver: local
