@@ -77,29 +77,255 @@
             margin-top: 0.5em;
             border-radius: 3px;
         }
+        .node-status {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1em;
+            padding: 0.5em;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            background-color: #f8f9fa;
+        }
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 0.5em;
+            display: inline-block;
+        }
+        .status-connected {
+            background-color: #28a745;
+        }
+        .status-disconnected {
+            background-color: #dc3545;
+        }
+        .progress-container {
+            margin-top: 1em;
+            padding: 1em;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            background-color: #f8f9fa;
+            display: none;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 0.5em;
+        }
+        .progress-fill {
+            height: 100%;
+            background-color: #007bff;
+            transition: width 0.3s ease;
+        }
+        .progress-log {
+            max-height: 150px;
+            overflow-y: auto;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 0.5em;
+            font-family: monospace;
+            font-size: 0.9em;
+            margin-top: 0.5em;
+        }
+        .log-entry {
+            margin-bottom: 0.25em;
+        }
     </style>
 </head>
 <body>
 
     <h1>NFT Owners' Powder Calculator</h1>
 
-    <form hx-post="/get-owners-powder"
-          hx-target="#results" 
-          hx-swap="outerHTML"
-          hx-indicator="#loading-indicator">
+    <div class="node-status" id="node-status">
+        <span class="status-indicator status-disconnected" id="status-indicator"></span>
+        <span id="status-text">Checking node connection...</span>
+    </div>
+
+    <form id="analysis-form">
         
         <label for="collection_address">NFT Collection Address:</label>
         <input type="text" id="collection_address" name="collection_address" 
                placeholder="e.g., 0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D" 
                required>
         
-        <button type="submit">Calculate Owners' Powder</button>
+        <button type="submit" id="submit-btn">Calculate Owners' Powder</button>
         <span id="loading-indicator" class="htmx-indicator"> Loading...</span>
     </form>
+
+    <div class="progress-container" id="progress-container">
+        <h4>Analysis Progress</h4>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <div>Step <span id="progress-step">0</span> of <span id="progress-total">10</span>: <span id="progress-message">Starting...</span></div>
+        <div class="progress-log" id="progress-log"></div>
+    </div>
 
     <div id="results">
         <!-- Results will be loaded here -->
     </div>
+
+    <script>
+        // Check node connection status
+        function checkNodeStatus() {
+            fetch('/node-status')
+                .then(response => response.json())
+                .then(data => {
+                    const indicator = document.getElementById('status-indicator');
+                    const statusText = document.getElementById('status-text');
+                    const submitBtn = document.getElementById('submit-btn');
+                    
+                    if (data.connected) {
+                        indicator.className = 'status-indicator status-connected';
+                        statusText.textContent = `Connected to Node (Block: ${data.block_number})`;
+                        submitBtn.disabled = false;
+                    } else {
+                        indicator.className = 'status-indicator status-disconnected';
+                        statusText.textContent = `Node Disconnected: ${data.error}`;
+                        submitBtn.disabled = true;
+                    }
+                })
+                .catch(error => {
+                    const indicator = document.getElementById('status-indicator');
+                    const statusText = document.getElementById('status-text');
+                    const submitBtn = document.getElementById('submit-btn');
+                    
+                    indicator.className = 'status-indicator status-disconnected';
+                    statusText.textContent = 'Connection check failed';
+                    submitBtn.disabled = true;
+                });
+        }
+        
+        // Enhanced form submission with progress tracking
+        function setupProgressTracking() {
+            const form = document.getElementById('analysis-form');
+            let isSubmitting = false; // Prevent duplicate submissions
+            
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Prevent duplicate submissions
+                if (isSubmitting) {
+                    console.log('Already submitting, ignoring duplicate request');
+                    return;
+                }
+                
+                const collectionAddress = document.getElementById('collection_address').value;
+                if (!collectionAddress) return;
+                
+                isSubmitting = true;
+                const submitBtn = document.getElementById('submit-btn');
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Analyzing...';
+                
+                // Show progress container
+                document.getElementById('progress-container').style.display = 'block';
+                document.getElementById('results').innerHTML = '';
+                
+                // Start simulated progress
+                simulateProgress();
+                
+                // Submit form using original fast endpoint
+                const formData = new FormData();
+                formData.append('collection_address', collectionAddress);
+                
+                fetch('/get-owners-powder', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.text())
+                .then(html => {
+                    // Complete progress
+                    updateProgress(10, 10, 'Analysis complete!');
+                    addLogEntry('Analysis complete!');
+                    
+                    // Wait a moment then show results
+                    setTimeout(() => {
+                        document.getElementById('results').innerHTML = html;
+                        // Keep progress window visible - don't hide it
+                        
+                        // Re-enable form
+                        isSubmitting = false;
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = 'Calculate Owners\' Powder';
+                        
+                        console.log('Results loaded successfully');
+                    }, 500);
+                })
+                .catch(error => {
+                    addLogEntry(`Error: ${error.message}`);
+                    document.getElementById('results').innerHTML = `<div class="error">Error: ${error.message}</div>`;
+                    
+                    // Re-enable form
+                    isSubmitting = false;
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Calculate Owners\' Powder';
+                });
+            });
+        }
+        
+        function simulateProgress() {
+            const steps = [
+                'Starting analysis...',
+                'Connecting to blockchain...',
+                'Calculating historical blocks...',
+                'Fetching NFT collection data...',
+                'Processing owner data (1 year ago)...',
+                'Processing owner data (6 months ago)...',
+                'Processing current owner data...',
+                'Calculating balances...',
+                'Generating chart...',
+                'Finalizing results...'
+            ];
+            
+            let currentStep = 0;
+            updateProgress(currentStep, 10, steps[currentStep]);
+            addLogEntry(steps[currentStep]);
+            
+            const interval = setInterval(() => {
+                currentStep++;
+                if (currentStep < steps.length) {
+                    updateProgress(currentStep, 10, steps[currentStep]);
+                    addLogEntry(steps[currentStep]);
+                } else {
+                    clearInterval(interval);
+                }
+            }, 2000); // Update every 2 seconds
+        }
+        
+        function updateProgress(step, total, message) {
+            const progressFill = document.getElementById('progress-fill');
+            const progressStep = document.getElementById('progress-step');
+            const progressTotal = document.getElementById('progress-total');
+            const progressMessage = document.getElementById('progress-message');
+            
+            const percentage = (step / total) * 100;
+            progressFill.style.width = percentage + '%';
+            progressStep.textContent = step;
+            progressTotal.textContent = total;
+            progressMessage.textContent = message;
+        }
+        
+        function addLogEntry(message) {
+            const log = document.getElementById('progress-log');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        // Initialize
+        checkNodeStatus();
+        setupProgressTracking();
+        
+        // Check node status every 30 seconds
+        setInterval(checkNodeStatus, 30000);
+    </script>
 
 </body>
 </html> 

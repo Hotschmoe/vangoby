@@ -2,3 +2,4 @@ Flask
 web3 
 plotly
 aiohttp
+kaleido

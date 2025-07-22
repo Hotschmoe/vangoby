@@ -336,6 +336,18 @@ def fetch_all_blocks_in_parallel(w3_instance, contract_instance, target_blocks):
     
     return results_data, total_fetch_duration
 
+# --- Node Status Route ---
+@app.route('/node-status')
+def node_status():
+    try:
+        if not w3:
+            return {'connected': False, 'error': 'Web3 not initialized'}
+        
+        block_number = w3.eth.block_number
+        return {'connected': True, 'block_number': block_number}
+    except Exception as e:
+        return {'connected': False, 'error': str(e)}
+
 # --- Frontend Route ---
 @app.route('/')
 def index():
@@ -402,23 +414,27 @@ def get_owners_powder():
         if item['data']['errors']:
             all_errors.extend([f"[{item['label']} @{item['block']}] {err}" for err in item['data']['errors']])
             
-    # --- Prepare Data for Graphing --- 
+    # --- Prepare Data for Graphing (in correct chronological order) --- 
     time_labels = []
     powder_per_owner_values = []
     successful_fetches = 0
     
-    for item in results_data:
-        label = item['label']
-        data = item['data']
-        if data['success']:
+    # Sort results in chronological order: oldest first
+    ordered_labels = ['-1 Year', '-6 Months', 'Now']
+    
+    for label in ordered_labels:
+        # Find the result for this label
+        result_item = next((item for item in results_data if item['label'] == label), None)
+        if result_item and result_item['data']['success']:
             successful_fetches += 1
             time_labels.append(label)
+            data = result_item['data']
             num_owners = data['owners']
             balance = data['balance_eth']
             # Avoid division by zero
             powder_per_owner = (balance / num_owners) if num_owners > 0 else Decimal(0)
             powder_per_owner_values.append(float(powder_per_owner))
-        else:
+        elif result_item:
             print(f"Skipping failed data point for '{label}' in graph.")
             
     # --- Generate Graph (only if we have data) --- 
@@ -430,10 +446,24 @@ def get_owners_powder():
                 title='Average Owner Powder (ETH) Over Time',
                 xaxis_title='Time Point',
                 yaxis_title='Avg ETH per Owner',
-                margin=dict(l=40, r=20, t=40, b=30)
+                yaxis=dict(rangemode='tozero'),
+                margin=dict(l=40, r=20, t=40, b=30),
+                width=800,
+                height=400
             )
-            graph_html = fig.to_html(full_html=False, include_plotlyjs=False)
-            print("Successfully generated Plotly graph HTML fragment.")
+            
+            # Try to generate as static image first
+            try:
+                import base64
+                img_bytes = fig.to_image(format="png")
+                img_base64 = base64.b64encode(img_bytes).decode()
+                graph_html = f'<img src="data:image/png;base64,{img_base64}" alt="Average Owner Powder Chart" style="max-width: 100%; height: auto;">'
+                print("Successfully generated Plotly graph as static image.")
+            except Exception as img_e:
+                print(f"Image generation failed ({img_e}), falling back to HTML chart")
+                # Fallback to HTML version if image generation fails
+                graph_html = fig.to_html(full_html=False, include_plotlyjs=False)
+                print("Successfully generated Plotly graph as HTML.")
         except Exception as e:
             print(f"Error generating Plotly graph: {e}")
             graph_html = f'<p class="error">Error generating graph: {e}</p>'
@@ -546,6 +576,138 @@ def sse_owners_powder():
             
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
+    
+    return Response(stream_with_context(generate()), mimetype="text/event-stream")
+
+# --- Progress Streaming Endpoint ---
+@app.route('/progress-stream')
+def progress_stream():
+    """Stream progress updates for queries using Server-Sent Events"""
+    collection_address_str = request.args.get('collection_address')
+    if not collection_address_str or not w3:
+        return Response("data: {\"error\": \"Invalid parameters or Web3 not initialized\"}\n\n",
+                        mimetype="text/event-stream")
+    
+    def generate():
+        try:
+            yield f"data: {json.dumps({'type': 'progress', 'message': 'Starting analysis...', 'step': 1, 'total': 10})}\n\n"
+            
+            collection_address = w3.to_checksum_address(collection_address_str)
+            contract = w3.eth.contract(address=collection_address, abi=MINIMAL_ERC721_ABI)
+            
+            # Calculate blocks
+            current_block = w3.eth.block_number
+            message = f'Current block: {current_block}'
+            yield f"data: {json.dumps({'type': 'progress', 'message': message, 'step': 2, 'total': 10})}\n\n"
+            
+            seconds_in_6_months = 6 * 30 * 24 * 60 * 60
+            seconds_in_1_year = 12 * 30 * 24 * 60 * 60
+            blocks_in_6_months = seconds_in_6_months // AVG_BLOCK_TIME_SECONDS
+            blocks_in_1_year = seconds_in_1_year // AVG_BLOCK_TIME_SECONDS
+            
+            block_6m_ago = max(0, current_block - blocks_in_6_months)
+            block_1y_ago = max(0, current_block - blocks_in_1_year)
+            
+            target_blocks = {
+                '-1 Year': block_1y_ago,
+                '-6 Months': block_6m_ago,
+                'Now': current_block
+            }
+            
+            message = f'Searching at blocks: {block_1y_ago}, {block_6m_ago}, {current_block}'
+            yield f"data: {json.dumps({'type': 'progress', 'message': message, 'step': 3, 'total': 10})}\n\n"
+            
+            # Process blocks and stream progress
+            results_data = []
+            step = 4
+            
+            for label, block_num in target_blocks.items():
+                message = f'Fetching data for {label} at block {block_num}...'
+                yield f"data: {json.dumps({'type': 'progress', 'message': message, 'step': step, 'total': 10})}\n\n"
+                
+                result = fetch_data_at_block(w3, contract, block_num)
+                results_data.append({
+                    'label': label,
+                    'block': block_num,
+                    'data': result
+                })
+                
+                step += 2
+                message = f'Completed {label}: {result["owners"]} owners, {float(result["balance_eth"]):.4f} ETH'
+                yield f"data: {json.dumps({'type': 'progress', 'message': message, 'step': step, 'total': 10})}\n\n"
+            
+            # Generate final results
+            yield f"data: {json.dumps({'type': 'progress', 'message': 'Generating results...', 'step': 9, 'total': 10})}\n\n"
+            
+            # Create the same HTML response as the main endpoint
+            response_html = '<div id="results">'
+            response_html += '<h3>Summary Over Time</h3>'
+            response_html += '<table border="1" style="width:100%; border-collapse: collapse; margin-bottom: 1em;">'
+            response_html += '<tr><th>Time Point</th><th>Block</th><th>Unique Owners</th><th>Total Powder (ETH)</th><th>Avg Powder (ETH)</th><th>Checked Tokens</th><th>Status</th></tr>'
+            
+            time_labels = []
+            powder_per_owner_values = []
+            
+            # Process in chronological order for consistent chart
+            ordered_labels = ['-1 Year', '-6 Months', 'Now']
+            
+            for label in ordered_labels:
+                # Find the result for this label
+                result_item = next((item for item in results_data if item['label'] == label), None)
+                if result_item:
+                    block = result_item['block']
+                    data = result_item['data']
+                    status = "Success" if data['success'] else "<span class='error'>Failed</span>"
+                    owners = data['owners']
+                    balance = data['balance_eth']
+                    checked = data['checked_tokens']
+                    avg_powder = (balance / owners) if owners > 0 else Decimal(0)
+                    
+                    response_html += f'<tr><td>{label}</td><td>{block}</td><td>{owners}</td><td>{balance:.4f}</td><td>{avg_powder:.4f}</td><td>{checked}</td><td>{status}</td></tr>'
+                    
+                    if data['success']:
+                        time_labels.append(label)
+                        powder_per_owner_values.append(float(avg_powder))
+            
+            response_html += '</table>'
+            
+            # Generate graph
+            graph_html = "<p>Not enough data points to generate graph.</p>"
+            if len(time_labels) > 1:
+                try:
+                    fig = go.Figure(data=go.Scatter(x=time_labels, y=powder_per_owner_values, mode='lines+markers'))
+                    fig.update_layout(
+                        title='Average Owner Powder (ETH) Over Time',
+                        xaxis_title='Time Point',
+                        yaxis_title='Avg ETH per Owner',
+                        yaxis=dict(rangemode='tozero'),
+                        margin=dict(l=40, r=20, t=40, b=30),
+                        width=800,
+                        height=400
+                    )
+                    
+                    # Try to generate as static image first
+                    try:
+                        import base64
+                        img_bytes = fig.to_image(format="png")
+                        img_base64 = base64.b64encode(img_bytes).decode()
+                        graph_html = f'<img src="data:image/png;base64,{img_base64}" alt="Average Owner Powder Chart" style="max-width: 100%; height: auto;">'
+                    except Exception as img_e:
+                        print(f"Image generation failed ({img_e}), falling back to HTML chart")
+                        # Fallback to HTML version if image generation fails
+                        graph_html = fig.to_html(full_html=False, include_plotlyjs=False)
+                except Exception as e:
+                    graph_html = f'<p class="error">Error generating graph: {e}</p>'
+            
+            response_html += '<h3>Average Owner Powder Trend</h3>'
+            response_html += graph_html
+            response_html += '</div>'
+            
+            # Send final result
+            yield f"data: {json.dumps({'type': 'complete', 'html': response_html, 'step': 10, 'total': 10})}\n\n"
+            
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
     
     return Response(stream_with_context(generate()), mimetype="text/event-stream")
 
