@@ -6,7 +6,9 @@
       "Bash(python3:*)",
       "Bash(source:*)",
       "Bash(pip install:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(go mod:*)",
+      "Bash(docker build:*)"
     ],
     "deny": []
   }
