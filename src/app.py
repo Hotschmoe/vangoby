@@ -13,6 +13,7 @@ import requests
 import threading
 from functools import lru_cache
 import hashlib
+import uuid
 
 app = Flask(__name__)
 
@@ -461,8 +462,28 @@ def get_owners_powder():
                 print("Successfully generated Plotly graph as static image.")
             except Exception as img_e:
                 print(f"Image generation failed ({img_e}), falling back to HTML chart")
-                # Fallback to HTML version if image generation fails
-                graph_html = fig.to_html(full_html=False, include_plotlyjs=False)
+                # Fallback to HTML version with proper Plotly.js integration
+                import uuid
+                chart_id = f"chart-{uuid.uuid4().hex[:8]}"
+                graph_html = f'''
+                <div id="{chart_id}" style="width: 800px; height: 400px; margin: 0 auto;"></div>
+                <script>
+                    var plotData = [{json.dumps({
+                        'x': time_labels,
+                        'y': powder_per_owner_values,
+                        'type': 'scatter',
+                        'mode': 'lines+markers',
+                        'name': 'Avg ETH per Owner'
+                    })}];
+                    var layout = {{
+                        title: 'Average Owner Powder (ETH) Over Time',
+                        xaxis: {{ title: 'Time Point' }},
+                        yaxis: {{ title: 'Avg ETH per Owner', rangemode: 'tozero' }},
+                        margin: {{ l: 40, r: 20, t: 40, b: 30 }}
+                    }};
+                    Plotly.newPlot('{chart_id}', plotData, layout);
+                </script>
+                '''
                 print("Successfully generated Plotly graph as HTML.")
         except Exception as e:
             print(f"Error generating Plotly graph: {e}")
@@ -480,21 +501,24 @@ def get_owners_powder():
     total_balance = Decimal(0)
     total_checked = 0
     
-    for item in results_data:
-        label = item['label']
-        block = item['block']
-        data = item['data']
-        status = "Success" if data['success'] else "<span class='error'>Failed</span>"
-        owners = data['owners']
-        balance = data['balance_eth']
-        checked = data['checked_tokens']
-        avg_powder = (balance / owners) if owners > 0 else Decimal(0)
-        
-        total_owners += owners
-        total_balance += balance
-        total_checked += checked
-        
-        response_html += f'<tr><td>{label}</td><td>{block}</td><td>{owners}</td><td>{balance:.4f}</td><td>{avg_powder:.4f}</td><td>{checked}</td><td>{status}</td></tr>'
+    # Display table rows in chronological order
+    for label in ordered_labels:
+        # Find the result for this label
+        result_item = next((item for item in results_data if item['label'] == label), None)
+        if result_item:
+            block = result_item['block']
+            data = result_item['data']
+            status = "Success" if data['success'] else "<span class='error'>Failed</span>"
+            owners = data['owners']
+            balance = data['balance_eth']
+            checked = data['checked_tokens']
+            avg_powder = (balance / owners) if owners > 0 else Decimal(0)
+            
+            total_owners += owners
+            total_balance += balance
+            total_checked += checked
+            
+            response_html += f'<tr><td>{label}</td><td>{block}</td><td>{owners}</td><td>{balance:.4f}</td><td>{avg_powder:.4f}</td><td>{checked}</td><td>{status}</td></tr>'
     
     response_html += '</table>'
     
@@ -694,8 +718,28 @@ def progress_stream():
                         graph_html = f'<img src="data:image/png;base64,{img_base64}" alt="Average Owner Powder Chart" style="max-width: 100%; height: auto;">'
                     except Exception as img_e:
                         print(f"Image generation failed ({img_e}), falling back to HTML chart")
-                        # Fallback to HTML version if image generation fails
-                        graph_html = fig.to_html(full_html=False, include_plotlyjs=False)
+                        # Fallback to HTML version with proper Plotly.js integration
+                        import uuid
+                        chart_id = f"chart-{uuid.uuid4().hex[:8]}"
+                        graph_html = f'''
+                        <div id="{chart_id}" style="width: 800px; height: 400px; margin: 0 auto;"></div>
+                        <script>
+                            var plotData = [{json.dumps({
+                                'x': time_labels,
+                                'y': powder_per_owner_values,
+                                'type': 'scatter',
+                                'mode': 'lines+markers',
+                                'name': 'Avg ETH per Owner'
+                            })}];
+                            var layout = {{
+                                title: 'Average Owner Powder (ETH) Over Time',
+                                xaxis: {{ title: 'Time Point' }},
+                                yaxis: {{ title: 'Avg ETH per Owner', rangemode: 'tozero' }},
+                                margin: {{ l: 40, r: 20, t: 40, b: 30 }}
+                            }};
+                            Plotly.newPlot('{chart_id}', plotData, layout);
+                        </script>
+                        '''
                 except Exception as e:
                     graph_html = f'<p class="error">Error generating graph: {e}</p>'
             
