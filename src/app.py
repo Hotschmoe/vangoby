@@ -22,17 +22,22 @@ NODE_URL = 'http://192.168.10.8:8545'
 REQUEST_TIMEOUT = 240 
 MAX_TOKENS_TO_CHECK = 11000
 AVG_BLOCK_TIME_SECONDS = 12
-OWNER_BATCH_SIZE = 50  # Increased from 25
-BALANCE_BATCH_SIZE = 100  # Increased from 50
-CONCURRENT_BATCHES = 5  # Number of concurrent batch requests
+# This are set by Erigon Node, below are the default values. You can chagne them in the Erigon RPC
+OWNER_BATCH_SIZE = 100
+BALANCE_BATCH_SIZE = 100
+CONCURRENT_BATCHES = 10
+MAX_CONCURRENT_CONNECTIONS = 50
 
 # Increased connection pool for better HTTP performance
 session = requests.Session()
 session.mount('http://', requests.adapters.HTTPAdapter(
-    pool_maxsize=25,
-    pool_connections=25,
+    pool_maxsize=50,
+    pool_connections=50,
     max_retries=3
 ))
+
+# Global aiohttp session for async requests
+async_session = None
 
 # Minimal ERC721 ABI for totalSupply and ownerOf
 MINIMAL_ERC721_ABI = [
@@ -84,7 +89,133 @@ def cache_key(contract_address, block, token_range=None):
         key_data += f"_{token_range[0]}_{token_range[1]}"
     return hashlib.md5(key_data.encode()).hexdigest()
 
-# --- Batch API request helper functions ---
+# --- Async HTTP session management ---
+async def get_async_session():
+    global async_session
+    if async_session is None:
+        connector = aiohttp.TCPConnector(
+            limit=MAX_CONCURRENT_CONNECTIONS,
+            limit_per_host=MAX_CONCURRENT_CONNECTIONS,
+            ttl_dns_cache=300,
+            use_dns_cache=True,
+        )
+        timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
+        async_session = aiohttp.ClientSession(
+            connector=connector,
+            timeout=timeout
+        )
+    return async_session
+
+async def close_async_session():
+    global async_session
+    if async_session:
+        await async_session.close()
+        async_session = None
+
+# --- Async batch API request helper functions ---
+async def async_batch_get_owners(w3_instance, contract_instance, token_ids, block_identifier):
+    """Get multiple owners in a single async RPC batch request"""
+    batch = []
+
+    # Prepare batch calls
+    for token_id in token_ids:
+        try:
+            tx_data = contract_instance.functions.ownerOf(token_id).build_transaction({
+                'chainId': 1,
+                'gas': 100000,
+                'gasPrice': w3_instance.to_wei('1', 'gwei'),
+                'nonce': 0
+            })
+            encoded_data = tx_data['data']
+        except Exception as e:
+            print(f"Error encoding data for token {token_id}: {e}")
+            continue
+
+        batch.append({
+            'jsonrpc': '2.0',
+            'method': 'eth_call',
+            'params': [{
+                'to': contract_instance.address,
+                'data': encoded_data
+            }, hex(block_identifier) if isinstance(block_identifier, int) else block_identifier],
+            'id': token_id
+        })
+
+    # Send async batch request
+    session = await get_async_session()
+    async with session.post(NODE_URL, json=batch) as response:
+        results = await response.json()
+    
+    # Process results
+    owners = set()
+    for result in results:
+        if 'result' in result and result['result']:
+            owner_hex = result['result']
+            if len(owner_hex) >= 42:
+                owner = w3_instance.to_checksum_address('0x' + owner_hex[-40:])
+                owners.add(owner)
+    
+    return owners
+
+async def async_batch_get_balances(w3_instance, owner_addresses, block_identifier, batch_size=200):
+    """Get balances for multiple addresses in async batches"""
+    total_balance_wei = 0
+    num_addresses = len(owner_addresses)
+    
+    # Create batches
+    batches = []
+    for i in range(0, num_addresses, batch_size):
+        batch_end = min(i + batch_size, num_addresses)
+        address_batch = owner_addresses[i:batch_end]
+        
+        if not address_batch:
+            continue
+
+        batch = []
+        for j, address in enumerate(address_batch):
+            batch.append({
+                'jsonrpc': '2.0',
+                'method': 'eth_getBalance',
+                'params': [address, hex(block_identifier) if isinstance(block_identifier, int) else block_identifier],
+                'id': i + j
+            })
+        batches.append(batch)
+    
+    # Execute all batches concurrently
+    session = await get_async_session()
+    tasks = []
+    
+    async def process_batch(batch):
+        try:
+            async with session.post(NODE_URL, json=batch) as response:
+                results = await response.json()
+                batch_total = 0
+                for result in results:
+                    if 'result' in result and result['result']:
+                        balance = int(result['result'], 16)
+                        batch_total += balance
+                    elif 'error' in result:
+                        print(f"Error in balance RPC result: {result['error']}")
+                return batch_total
+        except Exception as e:
+            print(f"Error processing balance batch: {e}")
+            return 0
+    
+    for batch in batches:
+        tasks.append(process_batch(batch))
+    
+    # Wait for all batches to complete
+    batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    for result in batch_results:
+        if isinstance(result, int):
+            total_balance_wei += result
+        else:
+            print(f"Batch processing error: {result}")
+    
+    return total_balance_wei
+
+# --- Legacy sync functions (keeping for compatibility) ---
 def batch_get_owners(w3_instance, contract_instance, token_ids, block_identifier):
     """Get multiple owners in a single RPC batch request"""
     batch = []
@@ -148,7 +279,10 @@ def batch_get_owners(w3_instance, contract_instance, token_ids, block_identifier
     
     return set(owners)
 
-def batch_get_balances(w3_instance, owner_addresses, block_identifier, batch_size=50):
+def batch_get_balances(w3_instance, owner_addresses, block_identifier, batch_size=None):
+    """Get balances for multiple addresses in batches"""
+    if batch_size is None:
+        batch_size = BALANCE_BATCH_SIZE
     """Get balances for multiple addresses in batches"""
     total_balance_wei = 0
     num_addresses = len(owner_addresses)
@@ -182,7 +316,16 @@ def batch_get_balances(w3_instance, owner_addresses, block_identifier, batch_siz
             # Process results for the current chunk
             results = response.json()
             
+            # Debug: Check if results is a list as expected
+            if not isinstance(results, list):
+                print(f"  [Balance Batch {i//batch_size + 1}] Warning: Expected list but got {type(results)}: {results}")
+                continue
+            
             for result in results:
+                if not isinstance(result, dict):
+                    print(f"  [Balance Batch {i//batch_size + 1}] Warning: Expected dict but got {type(result)}: {result}")
+                    continue
+                    
                 if 'result' in result and result['result']:
                     balance = int(result['result'], 16)  # Convert hex to int
                     total_balance_wei += balance
@@ -204,7 +347,135 @@ def batch_get_balances(w3_instance, owner_addresses, block_identifier, batch_siz
 
     return total_balance_wei
 
-# --- Optimized helper function for fetching data ---
+# --- Async optimized helper function for fetching data ---
+async def async_fetch_data_at_block(w3_instance, contract_instance, block_identifier, progress_callback=None):
+    """Async version - Fetches unique owners and their total balance at a specific block."""
+    start_time = time.time()
+    print(f"Async fetching data for block: {block_identifier}...")
+    fetch_errors = []
+    ownerof_duration = 0
+    balance_duration = 0
+    
+    def send_progress(message):
+        if progress_callback:
+            progress_callback(message)
+    
+    try:
+        # Get total supply at the specified block (with caching)
+        send_progress(f"Getting total supply at block {block_identifier}...")
+        supply_cache_key = get_cache_key_supply(contract_instance.address, block_identifier)
+        if supply_cache_key in total_supply_cache:
+            total_supply = total_supply_cache[supply_cache_key]
+            print(f"Cache hit for total supply at block {block_identifier}")
+        else:
+            total_supply = contract_instance.functions.totalSupply().call(block_identifier=block_identifier)
+            total_supply_cache[supply_cache_key] = total_supply
+        tokens_to_check = min(total_supply, MAX_TOKENS_TO_CHECK)
+        print(f"  [Block {block_identifier}] Total supply: {total_supply}. Checking first {tokens_to_check} tokens.")
+        send_progress(f"Found {total_supply} tokens. Checking first {tokens_to_check}...")
+
+        # --- Async Batch OwnerOf with larger concurrent batches --- 
+        start_ownerof = time.time()
+        send_progress(f"Fetching owners for {tokens_to_check} tokens...")
+        
+        # Process in larger concurrent batches
+        batch_size = OWNER_BATCH_SIZE
+        unique_owners = set()
+        checked_token_count = 0
+        total_batches = (tokens_to_check + batch_size - 1) // batch_size
+        
+        # Create all batches
+        owner_tasks = []
+        for i in range(0, tokens_to_check, batch_size):
+            batch_end = min(i + batch_size, tokens_to_check)
+            token_batch = list(range(i, batch_end))
+            checked_token_count += len(token_batch)
+            
+            # Create async task for each batch
+            task = async_batch_get_owners(w3_instance, contract_instance, token_batch, block_identifier)
+            owner_tasks.append((task, i, batch_end))
+        
+        # Execute batches with controlled concurrency
+        semaphore = asyncio.Semaphore(CONCURRENT_BATCHES)
+        
+        async def process_owner_batch(task, start_idx, end_idx):
+            async with semaphore:
+                batch_num = (start_idx // batch_size) + 1
+                send_progress(f"Processing token batch {batch_num}/{total_batches} (tokens {start_idx}-{end_idx-1})...")
+                try:
+                    batch_owners = await task
+                    return batch_owners
+                except Exception as e:
+                    err_msg = f"Err async_batch_get_owners(IDs {start_idx}-{end_idx}, Block {block_identifier}): {str(e)[:100]}"
+                    if len(fetch_errors) < 5:
+                        fetch_errors.append(err_msg)
+                    print(err_msg)
+                    send_progress(f"Error in batch {batch_num}: {str(e)[:50]}...")
+                    return set()
+        
+        # Execute all owner batches concurrently
+        owner_results = await asyncio.gather(*[
+            process_owner_batch(task, start_idx, end_idx) 
+            for task, start_idx, end_idx in owner_tasks
+        ], return_exceptions=True)
+        
+        # Combine all owner results
+        for result in owner_results:
+            if isinstance(result, set):
+                unique_owners.update(result)
+            else:
+                print(f"Owner batch error: {result}")
+        
+        ownerof_duration = time.time() - start_ownerof
+        print(f"  [Block {block_identifier}] Found {len(unique_owners)} owners in {ownerof_duration:.2f}s.")
+        send_progress(f"Found {len(unique_owners)} unique owners. Now fetching balances...")
+
+        # --- Async Batch Balance --- 
+        start_balance = time.time()
+        try:
+            send_progress(f"Calculating ETH balances for {len(unique_owners)} addresses...")
+            total_balance_wei = await async_batch_get_balances(w3_instance, list(unique_owners), block_identifier, BALANCE_BATCH_SIZE)
+        except Exception as e:
+            err_msg = f"Err async_batch_get_balances(Block {block_identifier}): {str(e)[:100]}"
+            print(err_msg)
+            if len(fetch_errors) < 5:
+                fetch_errors.append(err_msg)
+            total_balance_wei = 0
+            send_progress(f"Error fetching balances: {str(e)[:50]}...")
+        
+        balance_duration = time.time() - start_balance
+        print(f"  [Block {block_identifier}] Checked balances in {balance_duration:.2f}s.")
+        
+        total_balance_eth = w3_instance.from_wei(total_balance_wei, 'ether')
+        send_progress(f"Block {block_identifier} complete: {len(unique_owners)} owners, {float(total_balance_eth):.4f} ETH total")
+        
+        print(f"Finished async fetching data for block {block_identifier}. Total time: {time.time() - start_time:.2f}s")
+        return {
+            'owners': len(unique_owners),
+            'balance_eth': total_balance_eth,
+            'checked_tokens': checked_token_count,
+            'errors': fetch_errors,
+            'ownerof_duration': ownerof_duration,
+            'balance_duration': balance_duration,
+            'block': block_identifier,
+            'success': True
+        }
+
+    except Exception as e:
+        print(f"Error async fetching data for block {block_identifier}: {e}")
+        fetch_errors.append(f"Major error fetching data for block {block_identifier}: {str(e)[:150]}")
+        return {
+            'owners': 0,
+            'balance_eth': Decimal(0),
+            'checked_tokens': 0,
+            'errors': fetch_errors,
+            'ownerof_duration': ownerof_duration,
+            'balance_duration': balance_duration,
+            'block': block_identifier,
+            'success': False
+        }
+
+# --- Legacy sync function (keeping for compatibility) ---
 def fetch_data_at_block(w3_instance, contract_instance, block_identifier, progress_callback=None):
     """Fetches unique owners and their total balance at a specific block."""
     start_time = time.time()
@@ -229,34 +500,43 @@ def fetch_data_at_block(w3_instance, contract_instance, block_identifier, progre
         start_ownerof = time.time()
         send_progress(f"Fetching owners for {tokens_to_check} tokens...")
         
-        # Process in smaller batches (e.g., 25 at a time)
-        batch_size = 25
+        # Process in smaller batches for reliable processing  
+        batch_size = 50  # Conservative batch size for stability
         unique_owners = set()
         checked_token_count = 0
         total_batches = (tokens_to_check + batch_size - 1) // batch_size
         
-        for i in range(0, tokens_to_check, batch_size):
-            batch_end = min(i + batch_size, tokens_to_check)
-            token_batch = list(range(i, batch_end))
-            checked_token_count += len(token_batch)
-            batch_num = (i // batch_size) + 1
-            
-            send_progress(f"Processing token batch {batch_num}/{total_batches} (tokens {i}-{batch_end-1})...")
-            
-            try:
-                # Use batched request
-                batch_owners = batch_get_owners(w3_instance, contract_instance, token_batch, block_identifier)
-                unique_owners.update(batch_owners)
+        # Process multiple batches concurrently using ThreadPoolExecutor
+        with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENT_BATCHES) as executor:
+            # Create batch tasks
+            batch_tasks = []
+            for i in range(0, tokens_to_check, batch_size):
+                batch_end = min(i + batch_size, tokens_to_check)
+                token_batch = list(range(i, batch_end))
+                checked_token_count += len(token_batch)
+                batch_num = (i // batch_size) + 1
                 
-                if i > 0 and i % 50 == 0:
-                    print(f"  [Block {block_identifier}] Checked ownerOf up to token ID: {i}")
-                    send_progress(f"Found {len(unique_owners)} unique owners so far...")
-            except Exception as e:
-                err_msg = f"Err batch_get_owners(IDs {i}-{batch_end}, Block {block_identifier}): {str(e)[:100]}"
-                if len(fetch_errors) < 5:
-                    fetch_errors.append(err_msg)
-                print(err_msg)
-                send_progress(f"Error in batch {batch_num}: {str(e)[:50]}...")
+                # Submit batch to thread pool
+                future = executor.submit(batch_get_owners, w3_instance, contract_instance, token_batch, block_identifier)
+                batch_tasks.append((future, batch_num, i, batch_end))
+            
+            # Process completed batches
+            for future, batch_num, start_idx, end_idx in batch_tasks:
+                send_progress(f"Processing token batch {batch_num}/{total_batches} (tokens {start_idx}-{end_idx-1})...")
+                
+                try:
+                    batch_owners = future.result()
+                    unique_owners.update(batch_owners)
+                    
+                    if start_idx > 0 and start_idx % 50 == 0:
+                        print(f"  [Block {block_identifier}] Checked ownerOf up to token ID: {start_idx}")
+                        send_progress(f"Found {len(unique_owners)} unique owners so far...")
+                except Exception as e:
+                    err_msg = f"Err batch_get_owners(IDs {start_idx}-{end_idx}, Block {block_identifier}): {str(e)[:100]}"
+                    if len(fetch_errors) < 5:
+                        fetch_errors.append(err_msg)
+                    print(err_msg)
+                    send_progress(f"Error in batch {batch_num}: {str(e)[:50]}...")
         
         ownerof_duration = time.time() - start_ownerof
         print(f"  [Block {block_identifier}] Found {len(unique_owners)} owners in {ownerof_duration:.2f}s.")
@@ -265,9 +545,9 @@ def fetch_data_at_block(w3_instance, contract_instance, block_identifier, progre
         # --- Batch Balance --- 
         start_balance = time.time()
         try:
-            # Get all balances in a single batch
+            # Get all balances with optimized batch size
             send_progress(f"Calculating ETH balances for {len(unique_owners)} addresses...")
-            total_balance_wei = batch_get_balances(w3_instance, list(unique_owners), block_identifier)
+            total_balance_wei = batch_get_balances(w3_instance, list(unique_owners), block_identifier, BALANCE_BATCH_SIZE)
         except Exception as e:
             err_msg = f"Err batch_get_balances(Block {block_identifier}): {str(e)[:100]}"
             print(err_msg)
@@ -308,7 +588,52 @@ def fetch_data_at_block(w3_instance, contract_instance, block_identifier, progre
             'success': False
         }
 
-# --- Parallel execution of block data fetching ---
+# --- Async parallel execution of block data fetching ---
+async def async_fetch_all_blocks_in_parallel(w3_instance, contract_instance, target_blocks):
+    """Async version - Fetch data for multiple blocks in parallel"""
+    start_time = time.time()
+    results_data = []
+    
+    # Create tasks for all blocks
+    tasks = []
+    for label, block_num in target_blocks.items():
+        task = async_fetch_data_at_block(w3_instance, contract_instance, block_num)
+        tasks.append((task, label, block_num))
+    
+    # Execute all blocks concurrently
+    results = await asyncio.gather(*[task for task, _, _ in tasks], return_exceptions=True)
+    
+    # Process results
+    for i, (result, (_, label, block_num)) in enumerate(zip(results, tasks)):
+        if isinstance(result, dict):
+            results_data.append({
+                'label': label,
+                'block': block_num,
+                'data': result
+            })
+            print(f"Async block fetch for '{label}' ({block_num}) completed")
+        else:
+            print(f"Error in async_fetch_all_blocks_in_parallel for '{label}' ({block_num}): {result}")
+            results_data.append({
+                'label': label,
+                'block': block_num,
+                'data': {
+                    'success': False,
+                    'errors': [f"Error: {str(result)}"],
+                    'owners': 0,
+                    'balance_eth': Decimal(0),
+                    'checked_tokens': 0,
+                    'ownerof_duration': 0,
+                    'balance_duration': 0,
+                    'block': block_num
+                }
+            })
+    
+    total_fetch_duration = time.time() - start_time
+    print(f"All async block fetches completed in {total_fetch_duration:.2f}s")
+    return results_data, total_fetch_duration
+
+# --- Legacy sync function (keeping for compatibility) ---
 def fetch_all_blocks_in_parallel(w3_instance, contract_instance, target_blocks):
     """Fetch data for multiple blocks in parallel using ThreadPoolExecutor"""
     results_data = []
@@ -421,7 +746,7 @@ def get_owners_powder():
         'Now': w3.eth.block_number
     }
     
-    # --- Fetch All Blocks in Parallel ---
+    # --- Fetch All Blocks in Parallel (Sync Version - Known Working) ---
     results_data, total_fetch_duration = fetch_all_blocks_in_parallel(
         w3, contract, target_blocks
     )
