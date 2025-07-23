@@ -3,22 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HTMX Owners Powder PoC</title>
-    <script src="https://unpkg.com/htmx.org@1.9.10" integrity="sha384-D1Kt99CQMDuVetoL1lrYwg5t+9QdHe7NLX/SoJYkXDFfX37iInKRy5xLSi8nO7UC" crossorigin="anonymous"></script>
+    <title>NFT Owners' Powder Calculator</title>
     <script src='https://cdn.plot.ly/plotly-3.0.1.min.js'></script>
     <style>
         body {
-            font-family: sans-serif;
-            max-width: 800px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 900px;
             margin: 2em auto;
-            padding: 1em;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            background-color: #f9f9f9;
+            padding: 2em;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            padding: 2em;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
         }
         h1 {
             text-align: center;
-            color: #333;
+            color: #2c3e50;
+            margin-bottom: 1.5em;
+            font-size: 2.2em;
+            font-weight: 600;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
         label {
             display: block;
@@ -27,23 +40,39 @@
         }
         input[type="text"] {
             width: 100%;
-            padding: 0.5em;
-            margin-bottom: 1em;
-            border: 1px solid #ccc;
-            border-radius: 3px;
+            padding: 0.8em;
+            margin-bottom: 1.5em;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
             box-sizing: border-box;
+            font-size: 1em;
+            transition: border-color 0.3s ease;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
         button {
-            padding: 0.7em 1.5em;
-            background-color: #007bff;
+            padding: 0.8em 2em;
+            background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
             border: none;
-            border-radius: 3px;
+            border-radius: 8px;
             cursor: pointer;
             font-size: 1em;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
         }
         button:hover {
-            background-color: #0056b3;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
         }
         #results {
             margin-top: 1.5em;
@@ -52,14 +81,16 @@
             border-radius: 3px;
             background-color: #fff;
         }
-        .htmx-indicator {
+        .loading-indicator {
             display: none;
             margin-left: 1em;
+            color: #667eea;
+            font-weight: 500;
         }
-        .htmx-request .htmx-indicator {
+        .loading .loading-indicator {
             display: inline;
         }
-        .htmx-request button {
+        .loading button {
             cursor: wait;
         }
         .error {
@@ -137,8 +168,8 @@
     </style>
 </head>
 <body>
-
-    <h1>NFT Owners' Powder Calculator</h1>
+    <div class="container">
+        <h1>NFT Owners' Powder Calculator</h1>
 
     <div class="node-status" id="node-status">
         <span class="status-indicator status-disconnected" id="status-indicator"></span>
@@ -153,7 +184,7 @@
                required>
         
         <button type="submit" id="submit-btn">Calculate Owners' Powder</button>
-        <span id="loading-indicator" class="htmx-indicator"> Loading...</span>
+        <span id="loading-indicator" class="loading-indicator"> Loading...</span>
     </form>
 
     <div class="progress-container" id="progress-container">
@@ -167,6 +198,7 @@
 
     <div id="results">
         <!-- Results will be loaded here -->
+    </div>
     </div>
 
     <script>
@@ -219,8 +251,12 @@
                 
                 isSubmitting = true;
                 const submitBtn = document.getElementById('submit-btn');
+                const form = document.getElementById('analysis-form');
+                const loadingIndicator = document.getElementById('loading-indicator');
+                
                 submitBtn.disabled = true;
                 submitBtn.textContent = 'Analyzing...';
+                form.classList.add('loading');
                 
                 // Show progress container
                 document.getElementById('progress-container').style.display = 'block';
@@ -252,6 +288,7 @@
                         isSubmitting = false;
                         submitBtn.disabled = false;
                         submitBtn.textContent = 'Calculate Owners\' Powder';
+                        form.classList.remove('loading');
                         
                         console.log('Results loaded successfully');
                     }, 500);
@@ -264,6 +301,7 @@
                     isSubmitting = false;
                     submitBtn.disabled = false;
                     submitBtn.textContent = 'Calculate Owners\' Powder';
+                    form.classList.remove('loading');
                 });
             });
         }
