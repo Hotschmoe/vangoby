@@ -10,11 +10,11 @@ WORKDIR /app
 # Copy go module files
 COPY go.mod ./
 
-# Download dependencies (this will create go.sum)
-RUN go mod download
-
 # Copy source code
 COPY main.go ./
+
+# Download dependencies and generate go.sum
+RUN go mod tidy
 
 # Build the application with optimizations
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o vangoby .
