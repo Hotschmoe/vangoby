@@ -205,7 +205,7 @@ def batch_get_balances(w3_instance, owner_addresses, block_identifier, batch_siz
     return total_balance_wei
 
 # --- Optimized helper function for fetching data ---
-def fetch_data_at_block(w3_instance, contract_instance, block_identifier):
+def fetch_data_at_block(w3_instance, contract_instance, block_identifier, progress_callback=None):
     """Fetches unique owners and their total balance at a specific block."""
     start_time = time.time()
     print(f"Fetching data for block: {block_identifier}...")
@@ -213,24 +213,35 @@ def fetch_data_at_block(w3_instance, contract_instance, block_identifier):
     ownerof_duration = 0
     balance_duration = 0
     
+    def send_progress(message):
+        if progress_callback:
+            progress_callback(message)
+    
     try:
         # Get total supply at the specified block
+        send_progress(f"Getting total supply at block {block_identifier}...")
         total_supply = contract_instance.functions.totalSupply().call(block_identifier=block_identifier)
         tokens_to_check = min(total_supply, MAX_TOKENS_TO_CHECK)
         print(f"  [Block {block_identifier}] Total supply: {total_supply}. Checking first {tokens_to_check} tokens.")
+        send_progress(f"Found {total_supply} tokens. Checking first {tokens_to_check}...")
 
         # --- Batch OwnerOf --- 
         start_ownerof = time.time()
+        send_progress(f"Fetching owners for {tokens_to_check} tokens...")
         
         # Process in smaller batches (e.g., 25 at a time)
         batch_size = 25
         unique_owners = set()
         checked_token_count = 0
+        total_batches = (tokens_to_check + batch_size - 1) // batch_size
         
         for i in range(0, tokens_to_check, batch_size):
             batch_end = min(i + batch_size, tokens_to_check)
             token_batch = list(range(i, batch_end))
             checked_token_count += len(token_batch)
+            batch_num = (i // batch_size) + 1
+            
+            send_progress(f"Processing token batch {batch_num}/{total_batches} (tokens {i}-{batch_end-1})...")
             
             try:
                 # Use batched request
@@ -239,19 +250,23 @@ def fetch_data_at_block(w3_instance, contract_instance, block_identifier):
                 
                 if i > 0 and i % 50 == 0:
                     print(f"  [Block {block_identifier}] Checked ownerOf up to token ID: {i}")
+                    send_progress(f"Found {len(unique_owners)} unique owners so far...")
             except Exception as e:
                 err_msg = f"Err batch_get_owners(IDs {i}-{batch_end}, Block {block_identifier}): {str(e)[:100]}"
                 if len(fetch_errors) < 5:
                     fetch_errors.append(err_msg)
                 print(err_msg)
+                send_progress(f"Error in batch {batch_num}: {str(e)[:50]}...")
         
         ownerof_duration = time.time() - start_ownerof
         print(f"  [Block {block_identifier}] Found {len(unique_owners)} owners in {ownerof_duration:.2f}s.")
+        send_progress(f"Found {len(unique_owners)} unique owners. Now fetching balances...")
 
         # --- Batch Balance --- 
         start_balance = time.time()
         try:
             # Get all balances in a single batch
+            send_progress(f"Calculating ETH balances for {len(unique_owners)} addresses...")
             total_balance_wei = batch_get_balances(w3_instance, list(unique_owners), block_identifier)
         except Exception as e:
             err_msg = f"Err batch_get_balances(Block {block_identifier}): {str(e)[:100]}"
@@ -259,11 +274,13 @@ def fetch_data_at_block(w3_instance, contract_instance, block_identifier):
             if len(fetch_errors) < 5:
                 fetch_errors.append(err_msg)
             total_balance_wei = 0
+            send_progress(f"Error fetching balances: {str(e)[:50]}...")
         
         balance_duration = time.time() - start_balance
         print(f"  [Block {block_identifier}] Checked balances in {balance_duration:.2f}s.")
         
         total_balance_eth = w3_instance.from_wei(total_balance_wei, 'ether')
+        send_progress(f"Block {block_identifier} complete: {len(unique_owners)} owners, {float(total_balance_eth):.4f} ETH total")
         
         print(f"Finished fetching data for block {block_identifier}. Total time: {time.time() - start_time:.2f}s")
         return {
@@ -614,15 +631,20 @@ def progress_stream():
     
     def generate():
         try:
-            yield f"data: {json.dumps({'type': 'progress', 'message': 'Starting analysis...', 'step': 1, 'total': 10})}\n\n"
+            step = 1
+            total = 50  # More granular progress
+            
+            yield f"data: {json.dumps({'type': 'progress', 'message': 'Starting analysis...', 'step': step, 'total': total})}\n\n"
+            step += 1
             
             collection_address = w3.to_checksum_address(collection_address_str)
             contract = w3.eth.contract(address=collection_address, abi=MINIMAL_ERC721_ABI)
             
             # Calculate blocks
             current_block = w3.eth.block_number
-            message = f'Current block: {current_block}'
-            yield f"data: {json.dumps({'type': 'progress', 'message': message, 'step': 2, 'total': 10})}\n\n"
+            message = f'Connected to blockchain. Current block: {current_block}'
+            yield f"data: {json.dumps({'type': 'progress', 'message': message, 'step': step, 'total': total})}\n\n"
+            step += 1
             
             seconds_in_6_months = 6 * 30 * 24 * 60 * 60
             seconds_in_1_year = 12 * 30 * 24 * 60 * 60
@@ -638,30 +660,44 @@ def progress_stream():
                 'Now': current_block
             }
             
-            message = f'Searching at blocks: {block_1y_ago}, {block_6m_ago}, {current_block}'
-            yield f"data: {json.dumps({'type': 'progress', 'message': message, 'step': 3, 'total': 10})}\n\n"
+            message = f'Calculated historical blocks: 1yr={block_1y_ago}, 6mo={block_6m_ago}'
+            yield f"data: {json.dumps({'type': 'progress', 'message': message, 'step': step, 'total': total})}\n\n"
+            step += 2
             
             # Process blocks and stream progress
             results_data = []
-            step = 4
             
             for label, block_num in target_blocks.items():
-                message = f'Fetching data for {label} at block {block_num}...'
-                yield f"data: {json.dumps({'type': 'progress', 'message': message, 'step': step, 'total': 10})}\n\n"
+                message = f'Starting analysis for {label} (block {block_num})...'
+                yield f"data: {json.dumps({'type': 'progress', 'message': message, 'step': step, 'total': total})}\n\n"
+                step += 1
                 
-                result = fetch_data_at_block(w3, contract, block_num)
+                # Store progress messages to yield them
+                progress_messages = []
+                
+                def progress_callback(msg):
+                    progress_messages.append(msg)
+                
+                result = fetch_data_at_block(w3, contract, block_num, progress_callback)
+                
+                # Send all progress messages that were collected
+                for msg in progress_messages:
+                    yield f"data: {json.dumps({'type': 'progress', 'message': f'[{label}] {msg}', 'step': step, 'total': total})}\n\n"
+                    step += 1
+                
                 results_data.append({
                     'label': label,
                     'block': block_num,
                     'data': result
                 })
                 
-                step += 2
                 message = f'Completed {label}: {result["owners"]} owners, {float(result["balance_eth"]):.4f} ETH'
-                yield f"data: {json.dumps({'type': 'progress', 'message': message, 'step': step, 'total': 10})}\n\n"
+                yield f"data: {json.dumps({'type': 'progress', 'message': message, 'step': step, 'total': total})}\n\n"
+                step += 5
             
             # Generate final results
-            yield f"data: {json.dumps({'type': 'progress', 'message': 'Generating results...', 'step': 9, 'total': 10})}\n\n"
+            yield f"data: {json.dumps({'type': 'progress', 'message': 'Generating chart and final results...', 'step': step, 'total': total})}\n\n"
+            step += 2
             
             # Create the same HTML response as the main endpoint
             response_html = '<div id="results">'
@@ -748,7 +784,7 @@ def progress_stream():
             response_html += '</div>'
             
             # Send final result
-            yield f"data: {json.dumps({'type': 'complete', 'html': response_html, 'step': 10, 'total': 10})}\n\n"
+            yield f"data: {json.dumps({'type': 'complete', 'html': response_html, 'step': total, 'total': total})}\n\n"
             
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"

@@ -241,7 +241,7 @@
                 e.preventDefault();
                 
                 // Prevent duplicate submissions
-                if (isSubmitting) {
+                if (window.isSubmitting) {
                     console.log('Already submitting, ignoring duplicate request');
                     return;
                 }
@@ -249,7 +249,7 @@
                 const collectionAddress = document.getElementById('collection_address').value;
                 if (!collectionAddress) return;
                 
-                isSubmitting = true;
+                window.isSubmitting = true;
                 const submitBtn = document.getElementById('submit-btn');
                 const form = document.getElementById('analysis-form');
                 const loadingIndicator = document.getElementById('loading-indicator');
@@ -262,36 +262,17 @@
                 document.getElementById('progress-container').style.display = 'block';
                 document.getElementById('results').innerHTML = '';
                 
-                // Start simulated progress
-                simulateProgress();
+                // Start real-time progress tracking via Server-Sent Events
+                startProgressStream(collectionAddress);
                 
-                // Submit form using original fast endpoint
-                const formData = new FormData();
-                formData.append('collection_address', collectionAddress);
-                
-                fetch('/get-owners-powder', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.text())
-                .then(html => {
-                    // Complete progress
-                    updateProgress(10, 10, 'Analysis complete!');
-                    addLogEntry('Analysis complete!');
-                    
-                    // Wait a moment then show results
-                    setTimeout(() => {
-                        document.getElementById('results').innerHTML = html;
-                        // Keep progress window visible - don't hide it
-                        
-                        // Re-enable form
-                        isSubmitting = false;
-                        submitBtn.disabled = false;
-                        submitBtn.textContent = 'Calculate Owners\' Powder';
-                        form.classList.remove('loading');
-                        
-                        console.log('Results loaded successfully');
-                    }, 500);
+                // Submit form using progress streaming endpoint
+                fetch(`/progress-stream?collection_address=${encodeURIComponent(collectionAddress)}`)
+                .then(response => {
+                    // The streaming is handled by startProgressStream
+                    // This is just for cleanup if the stream fails
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
                 })
                 .catch(error => {
                     addLogEntry(`Error: ${error.message}`);
@@ -306,33 +287,73 @@
             });
         }
         
-        function simulateProgress() {
-            const steps = [
-                'Starting analysis...',
-                'Connecting to blockchain...',
-                'Calculating historical blocks...',
-                'Fetching NFT collection data...',
-                'Processing owner data (1 year ago)...',
-                'Processing owner data (6 months ago)...',
-                'Processing current owner data...',
-                'Calculating balances...',
-                'Generating chart...',
-                'Finalizing results...'
-            ];
+        function startProgressStream(collectionAddress) {
+            const eventSource = new EventSource(`/progress-stream?collection_address=${encodeURIComponent(collectionAddress)}`);
             
-            let currentStep = 0;
-            updateProgress(currentStep, 10, steps[currentStep]);
-            addLogEntry(steps[currentStep]);
-            
-            const interval = setInterval(() => {
-                currentStep++;
-                if (currentStep < steps.length) {
-                    updateProgress(currentStep, 10, steps[currentStep]);
-                    addLogEntry(steps[currentStep]);
-                } else {
-                    clearInterval(interval);
+            eventSource.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.type === 'progress') {
+                        updateProgress(data.step, data.total, data.message);
+                        addLogEntry(data.message);
+                    } else if (data.type === 'complete') {
+                        updateProgress(data.step, data.total, 'Analysis complete!');
+                        addLogEntry('Analysis complete!');
+                        
+                        // Show final results
+                        document.getElementById('results').innerHTML = data.html;
+                        
+                        // Re-enable form
+                        const submitBtn = document.getElementById('submit-btn');
+                        const form = document.getElementById('analysis-form');
+                        
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = 'Calculate Owners\' Powder';
+                        form.classList.remove('loading');
+                        
+                        // Reset submission flag
+                        window.isSubmitting = false;
+                        
+                        eventSource.close();
+                    } else if (data.type === 'error') {
+                        addLogEntry(`Error: ${data.message}`);
+                        document.getElementById('results').innerHTML = `<div class="error">Error: ${data.message}</div>`;
+                        
+                        // Re-enable form
+                        const submitBtn = document.getElementById('submit-btn');
+                        const form = document.getElementById('analysis-form');
+                        
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = 'Calculate Owners\' Powder';
+                        form.classList.remove('loading');
+                        
+                        window.isSubmitting = false;
+                        
+                        eventSource.close();
+                    }
+                } catch (e) {
+                    console.error('Error parsing progress data:', e);
+                    addLogEntry('Error parsing progress update');
                 }
-            }, 2000); // Update every 2 seconds
+            };
+            
+            eventSource.onerror = function(event) {
+                console.error('EventSource failed:', event);
+                addLogEntry('Connection to progress stream lost');
+                
+                // Re-enable form on error
+                const submitBtn = document.getElementById('submit-btn');
+                const form = document.getElementById('analysis-form');
+                
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Calculate Owners\' Powder';
+                form.classList.remove('loading');
+                
+                window.isSubmitting = false;
+                
+                eventSource.close();
+            };
         }
         
         function updateProgress(step, total, message) {
