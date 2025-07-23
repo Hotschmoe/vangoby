@@ -1,22 +1,24 @@
 services:
   vangoby:
-    build: .
-    container_name: vangoby-nft-analyzer
+    build:
+      context: .
+      dockerfile: Dockerfile.go
+    container_name: vangoby-nft-analyzer-go
     ports:
       - "5000:5000"
     environment:
-      - FLASK_ENV=production
       - NODE_URL=${NODE_URL:-http://192.168.10.8:8545}
       - REQUEST_TIMEOUT=${REQUEST_TIMEOUT:-240}
-      - MAX_TOKENS_TO_CHECK=${MAX_TOKENS_TO_CHECK:-10000}
+      - MAX_TOKENS_TO_CHECK=${MAX_TOKENS_TO_CHECK:-11000}
       - AVG_BLOCK_TIME_SECONDS=${AVG_BLOCK_TIME_SECONDS:-12}
+      - PORT=${PORT:-5000}
     restart: unless-stopped
     volumes:
       - ./logs:/app/logs
     networks:
       - vangoby-network
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000', timeout=5)"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/node-status"]
       interval: 30s
       timeout: 10s
       retries: 3
