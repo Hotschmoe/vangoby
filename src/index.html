@@ -138,19 +138,6 @@
             background-color: #f8f9fa;
             display: none;
         }
-        .progress-bar {
-            width: 100%;
-            height: 20px;
-            background-color: #e9ecef;
-            border-radius: 10px;
-            overflow: hidden;
-            margin-bottom: 0.5em;
-        }
-        .progress-fill {
-            height: 100%;
-            background-color: #007bff;
-            transition: width 0.3s ease;
-        }
         .progress-log {
             max-height: 150px;
             overflow-y: auto;
@@ -189,10 +176,7 @@
 
     <div class="progress-container" id="progress-container">
         <h4>Analysis Progress</h4>
-        <div class="progress-bar">
-            <div class="progress-fill" id="progress-fill"></div>
-        </div>
-        <div>Step <span id="progress-step">0</span> of <span id="progress-total">10</span>: <span id="progress-message">Starting...</span></div>
+        <div id="progress-message">Starting...</div>
         <div class="progress-log" id="progress-log"></div>
     </div>
 
@@ -372,15 +356,7 @@
         }
         
         function updateProgress(step, total, message) {
-            const progressFill = document.getElementById('progress-fill');
-            const progressStep = document.getElementById('progress-step');
-            const progressTotal = document.getElementById('progress-total');
             const progressMessage = document.getElementById('progress-message');
-            
-            const percentage = (step / total) * 100;
-            progressFill.style.width = percentage + '%';
-            progressStep.textContent = step;
-            progressTotal.textContent = total;
             progressMessage.textContent = message;
         }
         
