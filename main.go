@@ -520,7 +520,7 @@ func nodeStatusHandler(c *gin.Context) {
 }
 
 func indexHandler(c *gin.Context) {
-	htmlContent, err := ioutil.ReadFile("src/index.html")
+	htmlContent, err := ioutil.ReadFile("web/index.html")
 	if err != nil {
 		c.String(http.StatusNotFound, "Error: index.html not found.")
 		return

@@ -2,8 +2,8 @@ services:
   vangoby:
     build:
       context: .
-      dockerfile: Dockerfile.go
-    container_name: vangoby-nft-analyzer-go
+      dockerfile: Dockerfile
+    container_name: vangoby-nft-analyzer
     ports:
       - "5000:5000"
     environment:
