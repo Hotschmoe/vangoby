@@ -202,6 +202,18 @@
     </div>
 
     <script>
+        // Execute embedded scripts (specifically for Plotly charts)
+        function executeEmbeddedScripts() {
+            const scripts = document.getElementById('results').querySelectorAll('script');
+            scripts.forEach(script => {
+                try {
+                    eval(script.textContent);
+                } catch (e) {
+                    console.error('Error executing embedded script:', e);
+                }
+            });
+        }
+        
         // Check node connection status
         function checkNodeStatus() {
             fetch('/node-status')
@@ -303,6 +315,9 @@
                         
                         // Show final results
                         document.getElementById('results').innerHTML = data.html;
+                        
+                        // Execute any Plotly charts that were inserted
+                        executeEmbeddedScripts();
                         
                         // Re-enable form
                         const submitBtn = document.getElementById('submit-btn');

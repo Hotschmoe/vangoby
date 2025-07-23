@@ -470,38 +470,29 @@ def get_owners_powder():
                 height=400
             )
             
-            # Try to generate as static image first
-            try:
-                import base64
-                img_bytes = fig.to_image(format="png")
-                img_base64 = base64.b64encode(img_bytes).decode()
-                graph_html = f'<img src="data:image/png;base64,{img_base64}" alt="Average Owner Powder Chart" style="max-width: 100%; height: auto;">'
-                print("Successfully generated Plotly graph as static image.")
-            except Exception as img_e:
-                print(f"Image generation failed ({img_e}), falling back to HTML chart")
-                # Fallback to HTML version with proper Plotly.js integration
-                import uuid
-                chart_id = f"chart-{uuid.uuid4().hex[:8]}"
-                graph_html = f'''
-                <div id="{chart_id}" style="width: 800px; height: 400px; margin: 0 auto;"></div>
-                <script>
-                    var plotData = [{json.dumps({
-                        'x': time_labels,
-                        'y': powder_per_owner_values,
-                        'type': 'scatter',
-                        'mode': 'lines+markers',
-                        'name': 'Avg ETH per Owner'
-                    })}];
-                    var layout = {{
-                        title: 'Average Owner Powder (ETH) Over Time',
-                        xaxis: {{ title: 'Time Point' }},
-                        yaxis: {{ title: 'Avg ETH per Owner', rangemode: 'tozero' }},
-                        margin: {{ l: 40, r: 20, t: 40, b: 30 }}
-                    }};
-                    Plotly.newPlot('{chart_id}', plotData, layout);
-                </script>
-                '''
-                print("Successfully generated Plotly graph as HTML.")
+            # Generate HTML version with proper Plotly.js integration
+            import uuid
+            chart_id = f"chart-{uuid.uuid4().hex[:8]}"
+            graph_html = f'''
+            <div id="{chart_id}" style="width: 800px; height: 400px; margin: 0 auto;"></div>
+            <script>
+                var plotData = [{json.dumps({
+                    'x': time_labels,
+                    'y': powder_per_owner_values,
+                    'type': 'scatter',
+                    'mode': 'lines+markers',
+                    'name': 'Avg ETH per Owner'
+                })}];
+                var layout = {{
+                    title: 'Average Owner Powder (ETH) Over Time',
+                    xaxis: {{ title: 'Time Point' }},
+                    yaxis: {{ title: 'Avg ETH per Owner', rangemode: 'tozero' }},
+                    margin: {{ l: 40, r: 20, t: 40, b: 30 }}
+                }};
+                Plotly.newPlot('{chart_id}', plotData, layout);
+            </script>
+            '''
+            print("Generated Plotly graph as HTML.")
         except Exception as e:
             print(f"Error generating Plotly graph: {e}")
             graph_html = f'<p class="error">Error generating graph: {e}</p>'
@@ -746,36 +737,28 @@ def progress_stream():
                         height=400
                     )
                     
-                    # Try to generate as static image first
-                    try:
-                        import base64
-                        img_bytes = fig.to_image(format="png")
-                        img_base64 = base64.b64encode(img_bytes).decode()
-                        graph_html = f'<img src="data:image/png;base64,{img_base64}" alt="Average Owner Powder Chart" style="max-width: 100%; height: auto;">'
-                    except Exception as img_e:
-                        print(f"Image generation failed ({img_e}), falling back to HTML chart")
-                        # Fallback to HTML version with proper Plotly.js integration
-                        import uuid
-                        chart_id = f"chart-{uuid.uuid4().hex[:8]}"
-                        graph_html = f'''
-                        <div id="{chart_id}" style="width: 800px; height: 400px; margin: 0 auto;"></div>
-                        <script>
-                            var plotData = [{json.dumps({
-                                'x': time_labels,
-                                'y': powder_per_owner_values,
-                                'type': 'scatter',
-                                'mode': 'lines+markers',
-                                'name': 'Avg ETH per Owner'
-                            })}];
-                            var layout = {{
-                                title: 'Average Owner Powder (ETH) Over Time',
-                                xaxis: {{ title: 'Time Point' }},
-                                yaxis: {{ title: 'Avg ETH per Owner', rangemode: 'tozero' }},
-                                margin: {{ l: 40, r: 20, t: 40, b: 30 }}
-                            }};
-                            Plotly.newPlot('{chart_id}', plotData, layout);
-                        </script>
-                        '''
+                    # Generate HTML version with proper Plotly.js integration
+                    import uuid
+                    chart_id = f"chart-{uuid.uuid4().hex[:8]}"
+                    graph_html = f'''
+                    <div id="{chart_id}" style="width: 800px; height: 400px; margin: 0 auto;"></div>
+                    <script>
+                        var plotData = [{json.dumps({
+                            'x': time_labels,
+                            'y': powder_per_owner_values,
+                            'type': 'scatter',
+                            'mode': 'lines+markers',
+                            'name': 'Avg ETH per Owner'
+                        })}];
+                        var layout = {{
+                            title: 'Average Owner Powder (ETH) Over Time',
+                            xaxis: {{ title: 'Time Point' }},
+                            yaxis: {{ title: 'Avg ETH per Owner', rangemode: 'tozero' }},
+                            margin: {{ l: 40, r: 20, t: 40, b: 30 }}
+                        }};
+                        Plotly.newPlot('{chart_id}', plotData, layout);
+                    </script>
+                    '''
                 except Exception as e:
                     graph_html = f'<p class="error">Error generating graph: {e}</p>'
             
