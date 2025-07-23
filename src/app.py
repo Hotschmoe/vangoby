@@ -474,7 +474,7 @@ def get_owners_powder():
             import uuid
             chart_id = f"chart-{uuid.uuid4().hex[:8]}"
             graph_html = f'''
-            <div id="{chart_id}" style="width: 800px; height: 400px; margin: 0 auto;"></div>
+            <div id="{chart_id}" style="width: 100%; max-width: 800px; height: 400px; margin: 0 auto;"></div>
             <script>
                 var plotData = [{json.dumps({
                     'x': time_labels,
@@ -733,7 +733,7 @@ def progress_stream():
                         yaxis_title='Avg ETH per Owner',
                         yaxis=dict(rangemode='tozero'),
                         margin=dict(l=40, r=20, t=40, b=30),
-                        width=800,
+                        autosize=True,
                         height=400
                     )
                     
@@ -741,7 +741,7 @@ def progress_stream():
                     import uuid
                     chart_id = f"chart-{uuid.uuid4().hex[:8]}"
                     graph_html = f'''
-                    <div id="{chart_id}" style="width: 800px; height: 400px; margin: 0 auto;"></div>
+                    <div id="{chart_id}" style="width: 100%; max-width: 800px; height: 400px; margin: 0 auto;"></div>
                     <script>
                         var plotData = [{json.dumps({
                             'x': time_labels,
