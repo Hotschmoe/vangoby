@@ -35,7 +35,7 @@ WORKDIR /app
 COPY --from=builder /app/vangoby .
 
 # Copy the HTML file (needed for serving the frontend)
-COPY src/index.html src/
+COPY web/index.html web/
 
 # Change ownership to non-root user
 RUN chown -R appuser:appgroup /app
