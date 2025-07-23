@@ -630,23 +630,37 @@ func progressStreamHandler(c *gin.Context) {
 	c.Header("Connection", "keep-alive")
 	c.Header("Access-Control-Allow-Origin", "*")
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Check if client disconnected
+	clientDisconnected := false
+	go func() {
+		<-c.Request.Context().Done()
+		clientDisconnected = true
+		cancel()
+	}()
+
 	collectionAddress := common.HexToAddress(collectionAddressStr)
 
 	// Send initial progress
 	step := 1
 	total := 50
-	sendProgress(c, "progress", "Starting analysis...", step, total, "")
+	if !sendProgressSafe(c, &clientDisconnected, "progress", "Starting analysis...", step, total, "") {
+		return
+	}
 	step++
 
 	// Get current block
 	currentBlock, err := ethClient.getBlockNumber(ctx)
 	if err != nil {
-		sendProgress(c, "error", err.Error(), step, total, "")
+		sendProgressSafe(c, &clientDisconnected, "error", err.Error(), step, total, "")
 		return
 	}
 
-	sendProgress(c, "progress", fmt.Sprintf("Connected to blockchain. Current block: %d", currentBlock), step, total, "")
+	if !sendProgressSafe(c, &clientDisconnected, "progress", fmt.Sprintf("Connected to blockchain. Current block: %d", currentBlock), step, total, "") {
+		return
+	}
 	step++
 
 	// Calculate historical blocks
@@ -669,26 +683,62 @@ func progressStreamHandler(c *gin.Context) {
 		"Now":       currentBlock,
 	}
 
-	sendProgress(c, "progress", fmt.Sprintf("Calculated historical blocks: 1yr=%d, 6mo=%d", block1yAgo, block6mAgo), step, total, "")
+	if !sendProgressSafe(c, &clientDisconnected, "progress", fmt.Sprintf("Calculated historical blocks: 1yr=%d, 6mo=%d", block1yAgo, block6mAgo), step, total, "") {
+		return
+	}
 	step += 2
 
 	// Process blocks with progress updates
 	results := make(map[string]*BlockResult)
+	var stepMutex sync.Mutex
 
 	for label, blockNum := range targetBlocks {
-		sendProgress(c, "progress", fmt.Sprintf("Starting analysis for %s (block %d)...", label, blockNum), step, total, "")
+		if clientDisconnected {
+			return
+		}
+
+		if !sendProgressSafe(c, &clientDisconnected, "progress", fmt.Sprintf("Starting analysis for %s (block %d)...", label, blockNum), step, total, "") {
+			return
+		}
+		stepMutex.Lock()
 		step++
+		stepMutex.Unlock()
 
 		progressChan := make(chan string, 100)
+		var progressWg sync.WaitGroup
+		progressWg.Add(1)
+
 		go func() {
-			for msg := range progressChan {
-				sendProgress(c, "progress", fmt.Sprintf("[%s] %s", label, msg), step, total, "")
-				step++
+			defer progressWg.Done()
+			for {
+				select {
+				case msg, ok := <-progressChan:
+					if !ok {
+						return
+					}
+					if clientDisconnected {
+						return
+					}
+					stepMutex.Lock()
+					currentStep := step
+					step++
+					stepMutex.Unlock()
+					if !sendProgressSafe(c, &clientDisconnected, "progress", fmt.Sprintf("[%s] %s", label, msg), currentStep, total, "") {
+						return
+					}
+				case <-ctx.Done():
+					return
+				}
 			}
 		}()
 
 		result, err := ethClient.fetchDataAtBlock(ctx, collectionAddress, blockNum, progressChan)
 		close(progressChan)
+		progressWg.Wait() // Wait for progress goroutine to finish
+
+		if clientDisconnected {
+			return
+		}
 
 		if err != nil {
 			result = &BlockResult{
@@ -701,18 +751,32 @@ func progressStreamHandler(c *gin.Context) {
 		result.Label = label
 		results[label] = result
 
-		sendProgress(c, "progress", fmt.Sprintf("Completed %s: %d owners, %s ETH", label, result.Owners, result.BalanceETH.String()), step, total, "")
+		if !sendProgressSafe(c, &clientDisconnected, "progress", fmt.Sprintf("Completed %s: %d owners, %s ETH", label, result.Owners, result.BalanceETH.String()), step, total, "") {
+			return
+		}
+		stepMutex.Lock()
 		step += 5
+		stepMutex.Unlock()
+	}
+
+	if clientDisconnected {
+		return
 	}
 
 	// Generate final results
-	sendProgress(c, "progress", "Generating chart and final results...", step, total, "")
+	if !sendProgressSafe(c, &clientDisconnected, "progress", "Generating chart and final results...", step, total, "") {
+		return
+	}
 	html := generateResultsHTML(results)
 
-	sendProgress(c, "complete", "Analysis complete!", total, total, html)
+	sendProgressSafe(c, &clientDisconnected, "complete", "Analysis complete!", total, total, html)
 }
 
-func sendProgress(c *gin.Context, msgType, message string, step, total int, html string) {
+func sendProgressSafe(c *gin.Context, clientDisconnected *bool, msgType, message string, step, total int, html string) bool {
+	if *clientDisconnected {
+		return false
+	}
+
 	update := ProgressUpdate{
 		Type:    msgType,
 		Message: message,
@@ -722,8 +786,27 @@ func sendProgress(c *gin.Context, msgType, message string, step, total int, html
 	}
 
 	data, _ := json.Marshal(update)
-	c.Data(http.StatusOK, "text/event-stream", []byte(fmt.Sprintf("data: %s\n\n", data)))
-	c.Writer.Flush()
+	
+	// Check if client is still connected before writing
+	select {
+	case <-c.Request.Context().Done():
+		*clientDisconnected = true
+		return false
+	default:
+	}
+
+	_, err := c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", data)))
+	if err != nil {
+		log.Printf("Error writing to client (client likely disconnected): %v", err)
+		*clientDisconnected = true
+		return false
+	}
+
+	if flusher, ok := c.Writer.(http.Flusher); ok {
+		flusher.Flush()
+	}
+
+	return true
 }
 
 func generateResultsHTML(results map[string]*BlockResult) string {
