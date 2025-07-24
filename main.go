@@ -812,8 +812,8 @@ func sendProgressSafe(c *gin.Context, clientDisconnected *bool, msgType, message
 func generateResultsHTML(results map[string]*BlockResult) string {
 	html := `<div id="results">`
 	html += `<h3>Summary Over Time</h3>`
-	html += `<table border="1" style="width:100%; border-collapse: collapse; margin-bottom: 1em;">`
-	html += `<tr><th>Time Point</th><th>Block</th><th>Unique Owners</th><th>Total Powder (ETH)</th><th>Avg Powder (ETH)</th><th>Checked Tokens</th><th>Status</th></tr>`
+	html += `<table border="1" style="width:100%; border-collapse: collapse; margin-bottom: 1em; text-align: center;">`
+	html += `<tr><th>Time Point</th><th>Block</th><th>Unique Owners</th><th>Total Powder (ETH)</th><th>Avg Powder (ETH)</th><th>Checked Tokens</th></tr>`
 
 	orderedLabels := []string{"-1 Year", "-6 Months", "Now"}
 	timeLabels := []string{}
@@ -821,18 +821,13 @@ func generateResultsHTML(results map[string]*BlockResult) string {
 
 	for _, label := range orderedLabels {
 		if result, exists := results[label]; exists {
-			status := "Success"
-			if !result.Success {
-				status = `<span class="error">Failed</span>`
-			}
-
 			avgPowder := decimal.Zero
 			if result.Owners > 0 {
 				avgPowder = result.BalanceETH.Div(decimal.NewFromInt(int64(result.Owners)))
 			}
 
-			html += fmt.Sprintf(`<tr><td>%s</td><td>%d</td><td>%d</td><td>%s</td><td>%s</td><td>%d</td><td>%s</td></tr>`,
-				label, result.Block, result.Owners, result.BalanceETH.StringFixed(4), avgPowder.StringFixed(4), result.CheckedTokens, status)
+			html += fmt.Sprintf(`<tr><td>%s</td><td>%d</td><td>%d</td><td>%s</td><td>%s</td><td>%d</td></tr>`,
+				label, result.Block, result.Owners, result.BalanceETH.StringFixed(4), avgPowder.StringFixed(4), result.CheckedTokens)
 
 			if result.Success {
 				timeLabels = append(timeLabels, label)
